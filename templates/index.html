@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Real-Time Pothole Detection</title>
+</head>
+<body>
+    <h1>Pothole Detection</h1>
+    <video id="video" autoplay></video>
+    <canvas id="canvas" style="display:none;"></canvas>
+    <img id="output" alt="Processed Video Feed" />
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const output = document.getElementById('output');
+        const context = canvas.getContext('2d');
+
+        async function startVideo() {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            video.srcObject = stream;
+        }
+
+        async function sendFrame() {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            const imgData = canvas.toDataURL('image/jpeg');
+
+            // Send frame to backend
+            const response = await fetch('/detect', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: imgData })
+            });
+
+            // Handle response
+            if (response.ok) {
+                const result = await response.json();
+                output.src = result.processed_image;  // Update output with processed image
+            } else {
+                console.error("Error in response:", response);
+            }
+
+            requestAnimationFrame(sendFrame);
+        }
+
+        video.addEventListener('loadeddata', sendFrame);
+        startVideo();
+    </script>
+</body>
+</html>
