@@ -3,98 +3,100 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pothole Locations</title>
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Leaflet.js for map visualization -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <title>Pothole Detection Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
     <style>
-        html, body {
-            height: 100%;
+        body, html {
             margin: 0;
             padding: 0;
+            height: 100%;
+            overflow: hidden;
         }
+
         #map {
             height: 100vh;
             width: 100vw;
-        }
-        .locate-btn {
             position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        /* FIX: Ensure button is above the map */
+        #locateBtn {
+            position: fixed;
             bottom: 20px;
             right: 20px;
-            z-index: 1000;
-            background: white;
+            width: 60px;
+            height: 60px;
             border-radius: 50%;
-            padding: 10px;
-            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.2);
+            border: none;
+            background-color: #007bff;
+            color: white;
+            font-size: 24px;
             cursor: pointer;
-            font-size: 20px;
+            box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000; /* Ensure it's above the map */
         }
-        .locate-btn:hover {
-            background: #f3f4f6;
+
+        #locateBtn:hover {
+            background-color: #0056b3;
         }
     </style>
 </head>
 <body>
-
-    <!-- Full-Screen Map -->
     <div id="map"></div>
-
-    <!-- Locate Me Button -->
-    <button id="locateBtn" class="locate-btn">
-        📍
-    </button>
+    <button id="locateBtn">📍</button>
 
     <script>
         let userLatitude = null;
         let userLongitude = null;
         let userMarker = null;
-        let lastMarkerTime = 0;  // Store the last added marker timestamp
-    
-        // Initialize the map
+        let potholeMarkers = []; 
+
         const map = L.map('map').setView([12.9716, 77.5946], 13);
-    
-        // Google Maps layers
+
         const googleStreetMap = L.tileLayer('http://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
             maxZoom: 30,
             subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
         }).addTo(map);
-    
+
         const googleSat = L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
             maxZoom: 30,
             subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
         });
-    
+
         L.control.layers({
             "Google Street Map": googleStreetMap,
             "Google Satellite": googleSat
         }).addTo(map);
-    
-        // Get user's location
+
         async function getLocation() {
             const locateBtn = document.getElementById("locateBtn");
-            locateBtn.innerText = "🔄 Locating...";
+            locateBtn.innerText = "🔄";
             locateBtn.disabled = true;
-    
+
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(
                     function (position) {
                         userLatitude = position.coords.latitude;
                         userLongitude = position.coords.longitude;
                         map.setView([userLatitude, userLongitude], 15);
-    
+
                         if (userMarker) {
                             map.removeLayer(userMarker);
                         }
-    
+
                         userMarker = L.marker([userLatitude, userLongitude]).addTo(map)
                             .bindPopup('📍 Your Location')
                             .openPopup();
-    
+
                         locateBtn.innerText = "📍";
                         locateBtn.disabled = false;
-    
+
                         loadNearbyPotholes();
                     },
                     function (error) {
@@ -110,45 +112,51 @@
                 locateBtn.disabled = false;
             }
         }
-    
-        document.getElementById("locateBtn").addEventListener("click", getLocation);
-    
-        // Function to load nearby potholes
+
+        var myIcon = L.icon({
+            iconUrl: 'static/markers/marker.png',
+            iconSize: [50, 75],
+        });
+
         async function loadNearbyPotholes() {
-            if (userLatitude && userLongitude) {
-                const radius = 1000; // 1 km radius
-                try {
-                    const response = await fetch(`/nearby_potholes?latitude=${userLatitude}&longitude=${userLongitude}&radius=${radius}`);
-                    const potholes = await response.json();
-    
-                    potholes.forEach((pothole, index) => {
-                        const { latitude, longitude, image_path } = pothole;
-    
-                        // Add a 15-second delay before adding a new marker
-                        setTimeout(() => {
-                            const currentTime = new Date().getTime();
-    
-                            // Ensure we don’t add markers too frequently
-                            if (currentTime - lastMarkerTime > 15000) {
-                                L.marker([latitude, longitude]).addTo(map)
-                                    .bindPopup(`
-                                        <b>⚠️ Pothole Detected!</b><br>
-                                        <img src="/static/uploads/${image_path.split('/').pop()}" alt="Pothole Image" class="w-32 h-auto rounded-lg shadow-md" />
-                                    `);
-                                lastMarkerTime = currentTime;
-                            }
-                        }, index * 15000);  // Delay marker addition
+            if (!userLatitude || !userLongitude) {
+                console.error("❌ User location not available.");
+                return;
+            }
+
+            try {
+                const response = await fetch(`/get_potholes?lat=${userLatitude}&lon=${userLongitude}`);
+                const data = await response.json();
+                
+                console.log("✅ Pothole data fetched:", data);
+
+                if (data.potholes && data.potholes.length > 0) {
+                    potholeMarkers.forEach(marker => map.removeLayer(marker));
+                    potholeMarkers = [];
+
+                    data.potholes.forEach((pothole, index) => {
+                        console.log(`🔹 Adding pothole ${index + 1}:`, pothole);
+
+                        const potholeMarker = L.marker([pothole.latitude, pothole.longitude], {icon: myIcon})
+                            .addTo(map)
+                            .bindPopup(`
+                                <b>Pothole Detected</b><br>
+                                <img src="${pothole.image_url}" width="150" height="100"><br>
+                                Location: ${pothole.latitude}, ${pothole.longitude}
+                            `);
+
+                        potholeMarkers.push(potholeMarker);
                     });
-    
-                } catch (error) {
-                    console.log('⚠️ Error loading potholes:', error);
+                } else {
+                    console.warn("⚠️ No potholes found in response.");
                 }
+            } catch (error) {
+                console.error("❌ Error loading potholes:", error);
             }
         }
-    
+
+        document.getElementById("locateBtn").addEventListener("click", getLocation);
         window.onload = getLocation;
     </script>
-    
-    
 </body>
 </html>

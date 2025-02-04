@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify  # type: ignore
+from flask import Flask, render_template, request, jsonify, url_for  # type: ignore
 from ultralytics import YOLO  # type: ignore
 import cv2
 import numpy as np
@@ -72,8 +72,8 @@ def detect():
             cv2.imwrite(image_path, annotated_frame)
 
             # Sample Latitude & Longitude (Replace with actual GPS data)
-            latitude = 13.032600  # Example lat (Bangalore)
-            longitude = 77.592845  # Example long (Bangalore)
+            latitude = 13.024021  # Example lat (Bangalore)
+            longitude = 77.590863  # Example long (Bangalore)
 
             # Save pothole info to DB **only if a pothole was detected**
             new_pothole = Pothole(
@@ -102,34 +102,25 @@ def detect():
 
 
 
-@app.route('/nearby_potholes', methods=['GET'])
-def nearby_potholes():
+@app.route('/get_potholes', methods=['GET'])
+def get_potholes():
     try:
-        latitude = float(request.args.get('latitude'))
-        longitude = float(request.args.get('longitude'))
-        radius = float(request.args.get('radius', 1000))  # Default 1 km radius
+        potholes = Pothole.query.all()  # Fetch all potholes
 
-        potholes = Pothole.query.all()
-        nearby_potholes = []
+        # Select every 5th pothole
+        pothole_list = [{
+            'id': pothole.id,
+            'latitude': pothole.latitude,
+            'longitude': pothole.longitude,
+            'image_url': url_for('static', filename=f'uploads/{os.path.basename(pothole.image_path)}', _external=True)
+        } for index, pothole in enumerate(potholes) if index % 5 == 0]  # Every 5th entry
 
-        for pothole in potholes:
-            pothole_location = (pothole.latitude, pothole.longitude)
-            user_location = (latitude, longitude)
-
-            # Calculate distance between user and pothole
-            distance = geodesic(user_location, pothole_location).meters
-            if distance <= radius:
-                nearby_potholes.append({
-                    'latitude': pothole.latitude,
-                    'longitude': pothole.longitude,
-                    'image_path': pothole.image_path
-                })
-
-        return jsonify(nearby_potholes)
+        return jsonify({'potholes': pothole_list})
 
     except Exception as e:
-        print(f"Error in fetching nearby potholes: {e}")
-        return jsonify({'error': 'Failed to fetch potholes'}), 500
+        print(f"Error fetching pothole data: {e}")
+        return jsonify({'error': 'Failed to fetch pothole data'}), 500
+
 
 
 if __name__ == '__main__':
