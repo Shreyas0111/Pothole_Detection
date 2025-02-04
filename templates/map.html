@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pothole Locations</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Leaflet.js for map visualization -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+        #map {
+            height: 100vh;
+            width: 100vw;
+        }
+        .locate-btn {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+            background: white;
+            border-radius: 50%;
+            padding: 10px;
+            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.2);
+            cursor: pointer;
+            font-size: 20px;
+        }
+        .locate-btn:hover {
+            background: #f3f4f6;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Full-Screen Map -->
+    <div id="map"></div>
+
+    <!-- Locate Me Button -->
+    <button id="locateBtn" class="locate-btn">
+        📍
+    </button>
+
+    <script>
+        let userLatitude = null;
+        let userLongitude = null;
+        let userMarker = null;
+        let lastMarkerTime = 0;  // Store the last added marker timestamp
+    
+        // Initialize the map
+        const map = L.map('map').setView([12.9716, 77.5946], 13);
+    
+        // Google Maps layers
+        const googleStreetMap = L.tileLayer('http://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+            maxZoom: 30,
+            subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
+        }).addTo(map);
+    
+        const googleSat = L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+            maxZoom: 30,
+            subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
+        });
+    
+        L.control.layers({
+            "Google Street Map": googleStreetMap,
+            "Google Satellite": googleSat
+        }).addTo(map);
+    
+        // Get user's location
+        async function getLocation() {
+            const locateBtn = document.getElementById("locateBtn");
+            locateBtn.innerText = "🔄 Locating...";
+            locateBtn.disabled = true;
+    
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    function (position) {
+                        userLatitude = position.coords.latitude;
+                        userLongitude = position.coords.longitude;
+                        map.setView([userLatitude, userLongitude], 15);
+    
+                        if (userMarker) {
+                            map.removeLayer(userMarker);
+                        }
+    
+                        userMarker = L.marker([userLatitude, userLongitude]).addTo(map)
+                            .bindPopup('📍 Your Location')
+                            .openPopup();
+    
+                        locateBtn.innerText = "📍";
+                        locateBtn.disabled = false;
+    
+                        loadNearbyPotholes();
+                    },
+                    function (error) {
+                        alert('⚠️ Failed to retrieve location. Enable GPS and try again.');
+                        locateBtn.innerText = "📍";
+                        locateBtn.disabled = false;
+                    },
+                    { enableHighAccuracy: true, timeout: 10000 }
+                );
+            } else {
+                alert('⚠️ Geolocation is not supported by this browser.');
+                locateBtn.innerText = "📍";
+                locateBtn.disabled = false;
+            }
+        }
+    
+        document.getElementById("locateBtn").addEventListener("click", getLocation);
+    
+        // Function to load nearby potholes
+        async function loadNearbyPotholes() {
+            if (userLatitude && userLongitude) {
+                const radius = 1000; // 1 km radius
+                try {
+                    const response = await fetch(`/nearby_potholes?latitude=${userLatitude}&longitude=${userLongitude}&radius=${radius}`);
+                    const potholes = await response.json();
+    
+                    potholes.forEach((pothole, index) => {
+                        const { latitude, longitude, image_path } = pothole;
+    
+                        // Add a 15-second delay before adding a new marker
+                        setTimeout(() => {
+                            const currentTime = new Date().getTime();
+    
+                            // Ensure we don’t add markers too frequently
+                            if (currentTime - lastMarkerTime > 15000) {
+                                L.marker([latitude, longitude]).addTo(map)
+                                    .bindPopup(`
+                                        <b>⚠️ Pothole Detected!</b><br>
+                                        <img src="/static/uploads/${image_path.split('/').pop()}" alt="Pothole Image" class="w-32 h-auto rounded-lg shadow-md" />
+                                    `);
+                                lastMarkerTime = currentTime;
+                            }
+                        }, index * 15000);  // Delay marker addition
+                    });
+    
+                } catch (error) {
+                    console.log('⚠️ Error loading potholes:', error);
+                }
+            }
+        }
+    
+        window.onload = getLocation;
+    </script>
+    
+    
+</body>
+</html>
