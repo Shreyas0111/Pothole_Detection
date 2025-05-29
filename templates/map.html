@@ -22,7 +22,7 @@
             left: 0;
         }
 
-        /* FIX: Ensure button is above the map */
+        /* Ensure button is above the map */
         #locateBtn {
             position: fixed;
             bottom: 20px;
@@ -84,13 +84,13 @@
                     function (position) {
                         userLatitude = position.coords.latitude;
                         userLongitude = position.coords.longitude;
-                        map.setView([userLatitude, userLongitude], 15);
+                        map.setView([13.032600,77.592845], 15);
 
                         if (userMarker) {
                             map.removeLayer(userMarker);
                         }
 
-                        userMarker = L.marker([userLatitude, userLongitude]).addTo(map)
+                        userMarker = L.marker([13.032600,77.592845]).addTo(map)
                             .bindPopup('📍 Your Location')
                             .openPopup();
 

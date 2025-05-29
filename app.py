@@ -72,8 +72,8 @@ def detect():
             cv2.imwrite(image_path, annotated_frame)
 
             # Sample Latitude & Longitude (Replace with actual GPS data)
-            latitude = 13.024021  # Example lat (Bangalore)
-            longitude = 77.590863  # Example long (Bangalore)
+            latitude = 13.032600   # Example lat (Bangalore)
+            longitude = 77.592845  # Example long (Bangalore)
 
             # Save pothole info to DB **only if a pothole was detected**
             new_pothole = Pothole(
